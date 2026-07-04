@@ -2,7 +2,10 @@
 
 A real-time waterfall and peak-frequency tracking tool for HF Doppler / traveling
 ionospheric disturbance (TID) studies, built around a FlexRadio DAX audio feed
-(e.g. monitoring a CHU time-signal carrier).
+while tuned to a time/frequency signal such as WWV. This version does not use
+of DAX I/Q streams, rather it uses DAX audio and assumes that the carrier is 
+offset by 1 kHz. Propagation induces doppler of the carrier is measured as
+a delta from the 1 kHz tone.
 
 ## Overview
 
@@ -12,8 +15,8 @@ time. Peak frequency and magnitude are logged to CSV, and the waterfall image
 is periodically saved to disk. A companion FlexRadio TCP client can subscribe
 to radio state over the SmartSDR TCP API.
 
-Typical use case: receive a known-frequency reference signal (e.g. CHU on
-7850 kHz, tuned 1 kHz high in USB so the carrier appears as a tone at the
+Typical use case: receive a known-frequency reference signal (e.g. WWV on 10 Mhz,
+tuned 1 kHz high in USB so the carrier appears as a tone at the
 expected audio offset), and track Doppler shift of that tone over time to
 observe ionospheric TIDs.
 
@@ -28,8 +31,8 @@ observe ionospheric TIDs.
 - Peak records logged continuously to CSV and buffered in memory for a
   final combined CSV + matplotlib plot on exit
 - Periodic waterfall PNG snapshots saved to disk
-- FlexRadio TCP client (`TCP_Flex.py` / `TCP_Flex2.py`) for a persistent,
-  threaded connection to the SmartSDR TCP (CAT) API
+- FlexRadio TCP client (`TCP_Flex2.py`) for a persistent,
+  threaded connection to the SmartSDR TCP API
 - Graceful shutdown: stops audio capture, flushes buffered samples, and
   writes final CSV/PNG outputs
 
@@ -41,8 +44,7 @@ observe ionospheric TIDs.
 - `numpy`
 - `pandas`
 - `matplotlib`
-- A FlexRadio with SmartSDR and **DAX RX 1** enabled, receiver tuned in USB
-  with the carrier offset per the convention above
+- A FlexRadio with SmartSDR v4 
 - Windows (audio device discovery prioritizes WASAPI / WDM-KS / DirectSound /
   MME host APIs, in that order)
 
@@ -57,7 +59,7 @@ python HFDoppTool.py
 
 - The main window opens with the live waterfall plot.
 - **Processing Settings...** opens a dialog to set TX/RX station labels,
-  radio frequency (reference only today — see below), sample rate, FFT size,
+  radio frequency, radio IP and port, sample rate, FFT size,
   decimation factor, sample attenuation, LPF taps/cutoff, and CSV
   filename/directory.
 - **Show Peak Dialog** opens a non-modal window showing the current peak
@@ -110,14 +112,12 @@ which is mutated at runtime via the Processing Settings dialog
 
 ## FlexRadio TCP integration status
 
-Currently the TCP client only opens a connection and subscribes to
-panadapter state (`sub pan all`) for read/monitoring purposes — it does not
-yet control the radio. The **Radio Frequency** field in Processing Settings
-is presently a manually-entered reference value (`STATE.radio_frequency_khz`)
-and is not sent to the radio.
+Currently the TCP client opens a connection and subscribes to
+panadapter state (`sub pan all`) for read/monitoring purposes. After the user
+enters the desired frequency, radio IP address and port in the settings
+dialog, the radio is tuned to that frequency, the panadapter is centered on 
+that frequency, mode set to USB, and DAX 1 channel opened for output.
 
-Planned: issue an outbound TCP command to tune the radio to
-`radio_frequency_khz` when Processing Settings are applied.
 
 ## Known limitations
 
