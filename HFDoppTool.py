@@ -14,7 +14,6 @@
 
 
 import os
-import time
 from pyqtgraph.Qt import QtWidgets, QtCore
 import pyqtgraph as pg
 from pyqtgraph import exporters
@@ -24,7 +23,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 from queue import Empty, Queue
-from TCP_Flex2 import *
+from TCP_Flex2 import start_telnet_client
 
 
 from HFDOPP_audio_core import (
@@ -120,6 +119,14 @@ def clean_up_and_save_data(): # called when qt app ready to quit
     except Exception as exc:
         print(f"Warning: unable to stop audio stream during cleanup: {exc}")
 
+    try:
+        if STATE.radio_stop is not None:
+            STATE.radio_stop()
+            STATE.radio_send = None
+            STATE.radio_stop = None
+    except Exception as exc:
+        print(f"Warning: unable to close radio connection during cleanup: {exc}")
+
     # Process any final buffered audio that arrived before stream shutdown.
     try:
         update_waterfall()
@@ -213,6 +220,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
     def __init__(self, sample_rate, fft_size, decimation_factor, attenuation,
                  lpf_tap_count, lpf_cutoff_hz, csv_filename, csv_directory,
                  tx_station="", rx_station="", radio_frequency_mhz=0.0,
+                 radio_host="", radio_port=4992,
                  parent=None):
         super().__init__(parent)
         self.setWindowTitle("Processing Settings")
@@ -227,9 +235,15 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         self.radio_frequency_spin.setSuffix(" MHz")
         self.radio_frequency_spin.setValue(float(radio_frequency_mhz))
         self.rx_station_edit = QtWidgets.QLineEdit(rx_station)
+        self.radio_host_edit = QtWidgets.QLineEdit(radio_host)
+        self.radio_port_spin = QtWidgets.QSpinBox()
+        self.radio_port_spin.setRange(1, 65535)
+        self.radio_port_spin.setValue(int(radio_port))
         layout.addRow("Transmitter Station:", self.tx_station_edit)
         layout.addRow("Radio Frequency:", self.radio_frequency_spin)
         layout.addRow("Receiver Station:", self.rx_station_edit)
+        layout.addRow("Radio IP Address:", self.radio_host_edit)
+        layout.addRow("Radio TCP Port:", self.radio_port_spin)
 
         self.sample_rate_spin = QtWidgets.QSpinBox()
         self.sample_rate_spin.setRange(8000, 384000)
@@ -305,6 +319,8 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
             "tx_station": self.tx_station_edit.text().strip(),
             "radio_frequency_khz": float(self.radio_frequency_spin.value()),
             "rx_station": self.rx_station_edit.text().strip(),
+            "radio_host": self.radio_host_edit.text().strip(),
+            "radio_port": int(self.radio_port_spin.value()),
             "sample_rate": int(self.sample_rate_spin.value()),
             "fft_size": fft_size,
             "decimation_factor": int(self.decimation_spin.value()),
@@ -618,6 +634,46 @@ def sync_ui_with_processing_config():
     update_frequency_view()
 
 
+def handle_radio_message(msg):
+    print(f"[RADIO] {msg}")
+
+
+def handle_radio_disconnect():
+    print("Radio TCP connection closed.")
+    STATE.radio_send = None
+    STATE.radio_stop = None
+
+
+def reconnect_radio_if_needed(old_host, old_port):
+    """(Re)connect to the FlexRadio TCP API if not connected or the address changed."""
+    if STATE.radio_send is not None and STATE.radio_host == old_host and STATE.radio_port == old_port:
+        return
+
+    if STATE.radio_stop is not None:
+        try:
+            STATE.radio_stop()
+        except Exception as exc:
+            print(f"Warning: unable to close previous radio connection: {exc}")
+        STATE.radio_send = None
+        STATE.radio_stop = None
+
+    try:
+        STATE.radio_send, STATE.radio_stop = start_telnet_client(
+            host=STATE.radio_host,
+            port=STATE.radio_port,
+            on_message=handle_radio_message,
+            on_disconnect=handle_radio_disconnect,
+        )
+    except Exception as exc:
+        STATE.radio_send = None
+        STATE.radio_stop = None
+        QtWidgets.QMessageBox.warning(
+            main_win,
+            "Radio Connection Failed",
+            f"Unable to connect to radio at {STATE.radio_host}:{STATE.radio_port}:\n{exc}",
+        )
+
+
 def open_processing_settings_dialog(_checked=False, *, restart_stream=True):
     dialog = ProcessingSettingsDialog(
         sample_rate=STATE.sample_rate,
@@ -631,6 +687,8 @@ def open_processing_settings_dialog(_checked=False, *, restart_stream=True):
         tx_station=STATE.tx_station,
         rx_station=STATE.rx_station,
         radio_frequency_mhz=STATE.radio_frequency_khz,
+        radio_host=STATE.radio_host,
+        radio_port=STATE.radio_port,
         parent=main_win,
     )
 
@@ -647,6 +705,8 @@ def open_processing_settings_dialog(_checked=False, *, restart_stream=True):
         "csv_filename": STATE.csv_filename,
         "csv_directory": STATE.results_directory,
     }
+    old_radio_host = STATE.radio_host
+    old_radio_port = STATE.radio_port
 
     values = dialog.get_values()
     if not values["csv_filename"]:
@@ -666,18 +726,18 @@ def open_processing_settings_dialog(_checked=False, *, restart_stream=True):
             values["lpf_cutoff_hz"],
         )
         apply_runtime_options(STATE, values)
-        # Open a Telnet link to the FLexRadio and initialize it
-        send("c1| sub pan all\r\n")
-        send("c11|dax iq set 1 pan 0x40000000  daxiq_rate=48000\r\n")
-        send(f"c2|display pan s 0x40000000 center={STATE.radio_frequency_khz}\\r\n")
-        send(f"c3|slice tune 0 {STATE.radio_frequency_khz}\r\n")
-        send("c4|slice set 0 mode=USB\r\n")
-        send("c5|slice set 0 dax=1\r\n")
-        # insert a 1 second wait
-        time.sleep(1)
-        send("exit\r\n")
-        stop()
-        
+
+        # Connect (or reconnect, if the address changed) to the FlexRadio and initialize it.
+        reconnect_radio_if_needed(old_radio_host, old_radio_port)
+        if STATE.radio_send is not None:
+            STATE.radio_send("c1| sub pan all")
+            # this waterfall version does not use I/Q data, so the DAX IQ command is not needed.
+            # STATE.radio_send("c11|dax iq set 1 pan 0x40000000  daxiq_rate=48000")
+            STATE.radio_send(f"c2|display pan s 0x40000000 center={STATE.radio_frequency_khz}")
+            STATE.radio_send(f"c3|slice tune 0 {STATE.radio_frequency_khz}")
+            STATE.radio_send("c4|slice set 0 mode=USB")
+            STATE.radio_send("c5|slice set 0 dax=1")
+
         main_win.setWindowTitle(f"K1FR HF Doppler Analysis Tool  —  TX: {STATE.tx_station}  RX: {STATE.rx_station}")
         sync_ui_with_processing_config()
     except Exception as exc:

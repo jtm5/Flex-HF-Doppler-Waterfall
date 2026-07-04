@@ -36,6 +36,10 @@ class AppState:
     tx_station: str = "CHU7"
     radio_frequency_khz: float = 0.0
     rx_station: str = ""
+    radio_host: str = "10.0.0.252"
+    radio_port: int = 4992
+    radio_send: object = None
+    radio_stop: object = None
     effective_sample_rate: float = 0.0
     nyquist_hz: float = 0.0
     min_span_hz: float = 1.0
@@ -99,6 +103,8 @@ def apply_runtime_options(state, values):
     state.tx_station = values.get("tx_station", state.tx_station)
     state.radio_frequency_khz = values.get("radio_frequency_khz", state.radio_frequency_khz)
     state.rx_station = values.get("rx_station", state.rx_station)
+    state.radio_host = values.get("radio_host", state.radio_host)
+    state.radio_port = int(values.get("radio_port", state.radio_port))
     os.makedirs(state.results_directory, exist_ok=True)
 
 

@@ -121,8 +121,6 @@ Planned: issue an outbound TCP command to tune the radio to
 
 ## Known limitations
 
-- FlexRadio host/port are hardcoded (`10.0.0.252:4992`) in `TCP_Flex.py` /
-  `TCP_Flex2.py`.
 - Default results directory (`CSV_DIRECTORY`) is a hardcoded local Windows
   path.
 - Assumes a single audio channel (DAX RX 1) and USB mode with a fixed

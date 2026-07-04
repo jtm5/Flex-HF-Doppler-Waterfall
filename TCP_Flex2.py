@@ -1,7 +1,8 @@
 import socket
 import threading
 
-def start_telnet_client(host, port, on_message, on_disconnect=None):
+
+def start_telnet_client(host, port, on_message, on_disconnect=None, connect_timeout=4.0):
     """
     Start a two-way Telnet-style TCP client.
 
@@ -10,14 +11,25 @@ def start_telnet_client(host, port, on_message, on_disconnect=None):
         port (int): Server port.
         on_message (callable): Function called with each received line.
         on_disconnect (callable): Optional function called when server disconnects.
+        connect_timeout (float): Seconds to wait for the connection before raising.
 
     Returns:
         send_func (callable): Use send_func("text") to send data.
         stop_func (callable): Call stop_func() to close connection.
+
+    Raises:
+        OSError: If the connection cannot be established within connect_timeout
+            (e.g. socket.timeout, ConnectionRefusedError).
     """
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((host, port))
+    sock.settimeout(connect_timeout)
+    try:
+        sock.connect((host, port))
+    except OSError:
+        sock.close()
+        raise
+    sock.settimeout(None)
     running = True
 
     def recv_loop():
@@ -59,35 +71,3 @@ def start_telnet_client(host, port, on_message, on_disconnect=None):
         sock.close()
 
     return send_func, stop_func
-
-
-
-
-
-# from telnet_client import start_telnet_client
-
-def handle_message(msg):
-    print(f"[SERVER] {msg}")
-
-def handle_disconnect():
-    print("Server disconnected.")
-
-send, stop = start_telnet_client(
-    host="10.0.0.252",
-    port=4992,
-    on_message=handle_message,
-    on_disconnect=handle_disconnect
-)
-
-# # Now you can send messages from anywhere in your script:
-# send("c1| sub pan all\r\n")
-# msg = input("> ")
-# send(msg)
-# while True:
-#     msg = input("> ")
-#     if msg.lower() in ("exit", "quit"):
-#         break
-#     send(msg)
-
-# # Later, when shutting down:
-# # stop()
