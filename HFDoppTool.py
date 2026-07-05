@@ -157,16 +157,15 @@ def clean_up_and_save_data(): # called when qt app ready to quit
     print(f"Saved {len(peak_records_df)} records to CSV: {df_csv_filename}")
 
 
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.set_xlabel("Time")
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
     ax1.set_ylabel("Peak Frequency (Hz)", color="tab:blue")
     ax1.plot(peak_records_df["timestamp"], peak_records_df["peak_freq_hz"], color="tab:blue")
     ax1.set_ylim(998.0,1002.0)
 
-    ax2 = ax1.twinx()
+    ax2.set_xlabel("Time")
     ax2.set_ylabel("Peak Magnitude (dB)", color="tab:red")
     ax2.plot(peak_records_df["timestamp"], peak_records_df["peak_mag_db"], color="tab:red")
- 
+
     plt.savefig(os.path.join(STATE.results_directory, f"{_station_prefix()}_{START_DATETIME.replace(' ', '_').replace(':', '')}_df_FreqMag.png"))
     plt.show()
     plt.close("all")

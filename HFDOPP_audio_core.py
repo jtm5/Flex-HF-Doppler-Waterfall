@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
 from collections import deque
 from queue import Empty, Queue
+from typing import Callable, Optional
 import os
 import numpy as np
+import sounddevice as sd
 
 DEFAULT_SAMPLE_RATE = 48000
 DEFAULT_FFT_SIZE = 65536
@@ -38,8 +40,8 @@ class AppState:
     rx_station: str = ""
     radio_host: str = "10.0.0.252"
     radio_port: int = 4992
-    radio_send: object = None
-    radio_stop: object = None
+    radio_send: Optional[Callable[[str], None]] = None
+    radio_stop: Optional[Callable[[], None]] = None
     effective_sample_rate: float = 0.0
     nyquist_hz: float = 0.0
     min_span_hz: float = 1.0
@@ -51,13 +53,13 @@ class AppState:
     lpf_state: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float32))
     decimated_buffer: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float32))
     waterfall: np.ndarray = field(default_factory=lambda: np.zeros((WATERFALL_HEIGHT, 1), dtype=np.float32))
-    waterfall_row_timestamps: object = field(
+    waterfall_row_timestamps: deque[str] = field(
         default_factory=lambda: deque(["--:--:--"] * WATERFALL_HEIGHT, maxlen=WATERFALL_HEIGHT)
     )
     waterfall_queue: Queue = field(default_factory=Queue)
     waterfall_lines_saved: int = 0
     waterfall_image_save_count: int = 0
-    stream: object = None
+    stream: Optional[sd.InputStream] = None
     candidate_indices: list = field(default_factory=list)
 
 
