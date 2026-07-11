@@ -302,8 +302,11 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         layout.addRow("CSV filename:", self.csv_filename_edit)
         layout.addRow("CSV directory:", csv_dir_widget)
 
+        dialog_button_enum = getattr(
+            QtWidgets.QDialogButtonBox, "StandardButton", QtWidgets.QDialogButtonBox
+        )
         button_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            dialog_button_enum.Ok | dialog_button_enum.Cancel
         )
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -480,12 +483,14 @@ max_db = MAX_DB_DEFAULT
 center_hz = 1000
 span_hz = STATE.nyquist_hz
 
-min_db_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+qt_horizontal = getattr(getattr(QtCore.Qt, "Orientation", QtCore.Qt), "Horizontal")
+
+min_db_slider = QtWidgets.QSlider(qt_horizontal)
 min_db_slider.setRange(-160, 0)
 min_db_slider.setValue(min_db)
 min_db_slider.setToolTip("Waterfall minimum dB")
 
-max_db_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+max_db_slider = QtWidgets.QSlider(qt_horizontal)
 max_db_slider.setRange(-60, 20)
 max_db_slider.setValue(max_db)
 max_db_slider.setToolTip("Waterfall maximum dB")
@@ -493,12 +498,12 @@ max_db_slider.setToolTip("Waterfall maximum dB")
 min_db_label = QtWidgets.QLabel(f"Min dB: {min_db}")
 max_db_label = QtWidgets.QLabel(f"Max dB: {max_db}")
 
-center_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+center_slider = QtWidgets.QSlider(qt_horizontal)
 center_slider.setRange(0, int(STATE.nyquist_hz))
 center_slider.setValue(center_hz)
 center_slider.setToolTip("Center frequency shown on X-axis")
 
-span_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+span_slider = QtWidgets.QSlider(qt_horizontal)
 span_slider.setRange(0, 1000)
 span_slider.setValue(1000)
 span_slider.setToolTip("Visible frequency span")
@@ -691,7 +696,12 @@ def open_processing_settings_dialog(_checked=False, *, restart_stream=True):
         parent=main_win,
     )
 
-    if dialog.exec_() != QtWidgets.QDialog.Accepted:
+    dialog_exec = getattr(dialog, "exec", None)
+    if dialog_exec is None:
+        dialog_exec = dialog.exec_
+
+    dialog_code_enum = getattr(QtWidgets.QDialog, "DialogCode", QtWidgets.QDialog)
+    if dialog_exec() != dialog_code_enum.Accepted:
         return
 
     old_values = {
@@ -945,7 +955,11 @@ timer.start(30)
 QtCore.QTimer.singleShot(0, open_processing_settings_dialog)
 print("Audio waterfall running...")
 
-QtWidgets.QApplication.instance().exec_()
+app = QtWidgets.QApplication.instance()
+app_exec = getattr(app, "exec", None)
+if app_exec is None:
+    app_exec = app.exec_
+app_exec()
 
 # pyqt should be done, so save out the dataframe and clean up details
 # originally tried the app.aboutToQuit signal, but it seems to be unreliable in some environments and can be triggered multiple times, causing issues with the audio stream and file saving. Instead, we call the cleanup function directly after the event loop exits to ensure it runs exactly once.
