@@ -18,6 +18,7 @@ from pyqtgraph.Qt import QtWidgets, QtCore
 import pyqtgraph as pg
 from pyqtgraph import exporters
 import sounddevice as sd
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
