@@ -11,7 +11,7 @@ from queue import Empty, Queue
 
 # saved dataframe filename
 # D:\Data\Ham Radio\HAMSci Local Experiments\HF DOPPLER ANALYSIS\Good CHU7 Results\TID__CHU7 2jun26
-plot_title = "WMAL_K1FR_2026-07-04_201341_UTC_df_FreqMag"
+plot_title = "WWV10_K1FR_2026-07-11_235908_UTC_df_FreqMag"
 saved_dataframe_path = "D:\\Data\\Ham Radio\\HAMSci Local Experiments\\HF DOPPLER ANALYSIS"
 # saved_dataframe_path = os.path.join(STATE.RESULTS_DIR, DATAFRAME_FILENAME)
 df=pd.read_csv(saved_dataframe_path + "\\" + plot_title + ".csv")
